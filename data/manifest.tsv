@@ -1,0 +1,3 @@
+dataset	file	description
+bulk	bulk_all_gene_summary.tsv	All-gene Von Hoesslin bulk RNA-seq DESeq2-style normalized summary for d0 NR, d2 OVA, and d8 OVA.
+single_cell_pseudobulk	sc_pseudobulk_all_gene_counts.tsv	All-gene Kallies CD8 scRNA-seq pseudobulk counts summed by condition and median-ratio normalized.
