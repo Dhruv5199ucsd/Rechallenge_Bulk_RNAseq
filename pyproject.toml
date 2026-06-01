@@ -1,0 +1,18 @@
+[project]
+name = "kallies-sci-immuno-2025"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "anndata>=0.12.16",
+    "igraph>=1.0.0",
+    "ipykernel>=7.2.0",
+    "jupyterlab>=4.5.7",
+    "leidenalg>=0.12.0",
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.6",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
+    "scanpy>=1.11.5",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.1",
+]

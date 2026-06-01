@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environments
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large data should not go in git
+datasets/
+intermediate_objects/
+results/
+*.h5ad
+*.loom
+*.mtx
+*.mtx.gz
+*.tsv.gz
+*.csv.gz
+
+# Figure outputs
+figure_outputs/
+figure_scripts/**/outputs/
+
+# Logs/caches
+tmp/
+cache/
+logs/

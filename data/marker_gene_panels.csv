@@ -1,0 +1,9 @@
+panel,gene,display_order
+egress,Ccr7,1
+egress,S1pr1,2
+egress,Klf2,3
+program,Tgfbr1,4
+program,Runx3,5
+program,Itgar,6
+retention,Cd69,7
+retention,Cxcr6,8
