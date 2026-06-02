@@ -1,4 +1,4 @@
 dataset	file	description
 bulk	bulk_all_gene_summary.tsv	All-gene Von Hoesslin bulk RNA-seq DESeq2-style normalized summary for d0 NR, d2 OVA, and d8 OVA.
 single_cell_pseudobulk	sc_pseudobulk_all_gene_counts.tsv	All-gene Kallies CD8 scRNA-seq pseudobulk counts summed by condition and median-ratio normalized.
-maclean_cd8_resting_rechallenge	maclean_cd8_resting_rechallenge_pseudobulk_gene_summary.tsv	MacLean GSE194058 CD8a/Cd8b1-positive scRNA-seq pseudobulk mean CPM by resting and rechallenged condition; CLL excluded.
+maclean_cd8_resting_rechallenge	maclean_cd8_resting_rechallenge_pseudobulk_gene_summary.tsv	MacLean GSE194058 CD8a/Cd8b1-positive scRNA-seq pseudobulk DESeq2-style median-ratio normalized counts by resting and rechallenged condition; CLL excluded.

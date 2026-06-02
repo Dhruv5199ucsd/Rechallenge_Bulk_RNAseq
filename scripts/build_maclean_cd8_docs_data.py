@@ -13,6 +13,17 @@ MACLEAN_RESULTS = Path(
 OUT_DIR = REPO_DIR / "docs" / "data"
 
 
+def deseq_size_factors(counts: pd.DataFrame) -> pd.Series:
+    """Estimate DESeq2 median-ratio size factors from pseudobulk counts."""
+    expressed = counts.loc[(counts > 0).all(axis=1)]
+    if expressed.empty:
+        raise ValueError("No genes are nonzero in every sample; cannot estimate median-ratio size factors.")
+    log_geo_means = np.log(expressed).mean(axis=1)
+    ratios = expressed.div(np.exp(log_geo_means), axis=0)
+    size_factors = ratios.median(axis=0)
+    return size_factors / np.exp(np.log(size_factors).mean())
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     counts = pd.read_csv(
@@ -26,16 +37,16 @@ def main() -> None:
 
     samples = [sample for sample in counts.columns if sample in set(metadata["sample_id"])]
     counts = counts[samples]
-    library_sizes = counts.sum(axis=0)
-    cpm = counts.div(library_sizes.replace(0, np.nan), axis=1) * 1e6
+    size_factors = deseq_size_factors(counts)
+    normalized = counts.div(size_factors, axis=1)
 
     rows = []
     for condition in ["resting", "rechallenged"]:
         condition_samples = [sample for sample in samples if sample.startswith(f"{condition}_")]
-        condition_cpm = cpm[condition_samples]
+        condition_normalized = normalized[condition_samples]
         condition_counts = counts[condition_samples]
-        mean_cpm = condition_cpm.mean(axis=1)
-        sem_cpm = condition_cpm.sem(axis=1)
+        mean_normalized = condition_normalized.mean(axis=1)
+        sem_normalized = condition_normalized.sem(axis=1)
         raw_sum = condition_counts.sum(axis=1)
         cell_sum = int(n_cells.reindex(condition_samples).fillna(0).sum())
         for gene in counts.index:
@@ -44,12 +55,12 @@ def main() -> None:
                     "gene_id": gene,
                     "gene_name": gene,
                     "condition": condition,
-                    "normalized_count": mean_cpm.loc[gene],
-                    "sem_normalized_count": sem_cpm.loc[gene],
+                    "normalized_count": mean_normalized.loc[gene],
+                    "sem_normalized_count": sem_normalized.loc[gene],
                     "raw_count": raw_sum.loc[gene],
                     "n_cells": cell_sum,
                     "n_samples": len(condition_samples),
-                    "plot_expression": mean_cpm.loc[gene] + 1,
+                    "plot_expression": mean_normalized.loc[gene] + 1,
                 }
             )
 
@@ -61,7 +72,7 @@ def main() -> None:
     new_row = {
         "dataset": "maclean_cd8_resting_rechallenge",
         "file": out_file.name,
-        "description": "MacLean GSE194058 CD8a/Cd8b1-positive scRNA-seq pseudobulk mean CPM by resting and rechallenged condition; CLL excluded.",
+        "description": "MacLean GSE194058 CD8a/Cd8b1-positive scRNA-seq pseudobulk DESeq2-style median-ratio normalized counts by resting and rechallenged condition; CLL excluded.",
     }
     manifest = manifest.loc[manifest["dataset"].ne(new_row["dataset"])]
     manifest = pd.concat([manifest, pd.DataFrame([new_row])], ignore_index=True)
@@ -70,6 +81,8 @@ def main() -> None:
     print(f"Saved {out_file}")
     print(f"Rows: {len(rows)}")
     print(f"Samples: {', '.join(samples)}")
+    print("Size factors:")
+    print(size_factors.to_string())
 
 
 if __name__ == "__main__":
