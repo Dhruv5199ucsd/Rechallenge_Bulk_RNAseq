@@ -19,6 +19,8 @@
       --sc-iel: #4f8f6f;
       --sc-lpl: #8e72b8;
       --sc-re: #c4514b;
+      --maclean-resting: #4b9ed8;
+      --maclean-rechallenged: #df7b35;
     }
     * { box-sizing: border-box; }
     body {
@@ -178,11 +180,17 @@
 <body>
   <header>
     <h1>RNA-seq Gene Explorer</h1>
-    <div class="hint">Bulk RNA-seq and single-cell pseudobulk expression for all exported genes.</div>
+    <div class="hint">Bulk RNA-seq and single-cell pseudobulk expression for all exported genes across linked datasets.</div>
   </header>
 
   <main>
     <aside>
+      <label for="dataSource">Dataset</label>
+      <select id="dataSource">
+        <option value="kallies">Kallies Sci Immuno 2025 + Von Hoesslin bulk</option>
+        <option value="maclean_cd8">MacLean GSE194058 CD8 resting vs rechallenged</option>
+      </select>
+
       <label for="geneSearch">Quick gene</label>
       <input id="geneSearch" list="geneOptions" placeholder="Type a gene symbol, e.g. Klf2">
       <datalist id="geneOptions"></datalist>
@@ -230,22 +238,39 @@
   </div>
 
   <script>
-    const bulkPath = "data/bulk_all_gene_summary.tsv";
-    const scPath = "data/sc_pseudobulk_all_gene_counts.tsv";
-    const bulkOrder = ["d0 NR", "d2 OVA", "d8 OVA"];
-    const scOrder = ["IEL_memory", "LPL_memory", "rechallenge"];
+    const datasets = {
+      kallies: {
+        bulkPath: "data/bulk_all_gene_summary.tsv",
+        scPath: "data/sc_pseudobulk_all_gene_counts.tsv",
+        bulkOrder: ["d0 NR", "d2 OVA", "d8 OVA"],
+        scOrder: ["IEL_memory", "LPL_memory", "rechallenge"],
+        scSubtitle: "sc pseudobulk",
+        hasBulk: true
+      },
+      maclean_cd8: {
+        bulkPath: null,
+        scPath: "data/maclean_cd8_resting_rechallenge_pseudobulk_gene_summary.tsv",
+        bulkOrder: [],
+        scOrder: ["resting", "rechallenged"],
+        scSubtitle: "MacLean CD8 pseudobulk, mean of 3 replicates",
+        hasBulk: false
+      }
+    };
     const colors = {
       "d0 NR": "#4b9ed8",
       "d2 OVA": "#e3bd32",
       "d8 OVA": "#df7b35",
       "IEL_memory": "#4f8f6f",
       "LPL_memory": "#8e72b8",
-      "rechallenge": "#c4514b"
+      "rechallenge": "#c4514b",
+      "resting": "#4b9ed8",
+      "rechallenged": "#df7b35"
     };
 
     let bulkRows = [];
     let scRows = [];
     let allGenes = [];
+    let activeDataset = datasets.kallies;
 
     const statusEl = document.getElementById("status");
     const plotEl = document.getElementById("plot");
@@ -255,6 +280,7 @@
     const modalPlotEl = document.getElementById("modalPlot");
 
     document.getElementById("render").addEventListener("click", render);
+    document.getElementById("dataSource").addEventListener("change", loadData);
     expandBtn.addEventListener("click", expandPlot);
     document.getElementById("closeModal").addEventListener("click", closeModal);
     modalEl.addEventListener("click", event => {
@@ -271,17 +297,26 @@
 
     async function loadData() {
       try {
-        const [bulkText, scText] = await Promise.all([
-          fetch(bulkPath).then(checkFetch).then(r => r.text()),
-          fetch(scPath).then(checkFetch).then(r => r.text())
-        ]);
-        bulkRows = parseTable(bulkText);
+        activeDataset = datasets[document.getElementById("dataSource").value];
+        renderBtn.disabled = true;
+        renderBtn.textContent = "Loading data...";
+        statusEl.textContent = "Loading static TSV files...";
+        const viewMode = document.getElementById("viewMode");
+        viewMode.disabled = !activeDataset.hasBulk;
+        if (!activeDataset.hasBulk) viewMode.value = "sc";
+
+        const promises = [fetch(activeDataset.scPath).then(checkFetch).then(r => r.text())];
+        if (activeDataset.hasBulk) promises.unshift(fetch(activeDataset.bulkPath).then(checkFetch).then(r => r.text()));
+        const texts = await Promise.all(promises);
+        const scText = activeDataset.hasBulk ? texts[1] : texts[0];
+        bulkRows = activeDataset.hasBulk ? parseTable(texts[0]) : [];
         scRows = parseTable(scText);
         allGenes = unique([...bulkRows.map(r => r.gene_name), ...scRows.map(r => r.gene_name)]).sort(naturalSort);
         populateGenes(allGenes);
         renderBtn.disabled = false;
         renderBtn.textContent = "Render plot";
-        statusEl.textContent = `${bulkRows.length.toLocaleString()} bulk summary rows\n${scRows.length.toLocaleString()} sc pseudobulk rows\n${allGenes.length.toLocaleString()} searchable gene symbols`;
+        const bulkLine = activeDataset.hasBulk ? `${bulkRows.length.toLocaleString()} bulk summary rows\n` : "";
+        statusEl.textContent = `${bulkLine}${scRows.length.toLocaleString()} sc pseudobulk rows\n${allGenes.length.toLocaleString()} searchable gene symbols`;
         render();
       } catch (error) {
         statusEl.textContent = `Could not load static data files.\nUse a local web server or GitHub Pages, not a file:// URL.\n${error.message}`;
@@ -356,10 +391,10 @@
       panels.forEach((panel, panelIndex) => {
         const x0 = left + panelIndex * (panelW + gap);
         const values = panelValues(panel);
-        const labels = panel.dataset === "bulk" ? bulkOrder : scOrder;
+        const labels = panel.dataset === "bulk" ? activeDataset.bulkOrder : activeDataset.scOrder;
         const subtitle = panel.dataset === "bulk"
           ? `Bulk ${document.getElementById("population").value}`
-          : "sc pseudobulk";
+          : activeDataset.scSubtitle;
 
         svg.appendChild(text(x0 + panelW / 2, top - 46, panel.gene, "gene-title", "middle"));
         svg.appendChild(text(x0 + panelW / 2, top - 26, subtitle, "small", "middle"));
@@ -379,7 +414,7 @@
               svg.appendChild(line(cx - 6, low, cx + 6, low, "#e9eef5", 1.4));
               svg.appendChild(line(cx - 6, high, cx + 6, high, "#e9eef5", 1.4));
             }
-            const note = panel.dataset === "bulk" ? `n=${row.n}` : `${row.n.toLocaleString()} cells`;
+            const note = row.note || (panel.dataset === "bulk" ? `n=${row.n}` : `${row.n.toLocaleString()} cells`);
             svg.appendChild(text(cx, top + panelH + 70, note, "small", "middle"));
           }
           const labelLines = label.split(/[ _]/);
@@ -426,8 +461,9 @@
         .map(row => ({
           label: row.condition,
           mean: Number(row.normalized_count),
-          sem: 0,
-          n: Number(row.n_cells)
+          sem: Number(row.sem_normalized_count || 0),
+          n: Number(row.n_cells || 0),
+          note: row.n_samples ? `n=${row.n_samples}` : `${Number(row.n_cells || 0).toLocaleString()} cells`
         }));
     }
 
