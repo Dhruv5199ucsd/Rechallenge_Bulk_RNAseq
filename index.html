@@ -106,6 +106,25 @@
       margin-top: 12px;
       white-space: pre-line;
     }
+    .color-controls {
+      display: grid;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .color-control {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 46px;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .color-control input[type="color"] {
+      width: 46px;
+      height: 30px;
+      padding: 2px;
+      cursor: pointer;
+    }
     .plot-wrap {
       min-width: 900px;
     }
@@ -188,6 +207,7 @@
       <label for="dataSource">Dataset</label>
       <select id="dataSource">
         <option value="kallies">Kallies Sci Immuno 2025 + Von Hoesslin bulk</option>
+        <option value="low_kaech">Low &amp; Kaech GSE147907 bulk time course</option>
         <option value="maclean_cd8">MacLean GSE194058 CD8 resting vs rechallenged</option>
       </select>
 
@@ -211,6 +231,9 @@
         <option value="DP">DP</option>
         <option value="DN">DN</option>
       </select>
+
+      <label>Bar colors</label>
+      <div id="colorControls" class="color-controls"></div>
 
       <label for="scale">Y scale</label>
       <select id="scale">
@@ -245,7 +268,27 @@
         bulkOrder: ["d0 NR", "d2 OVA", "d8 OVA"],
         scOrder: ["IEL_memory", "LPL_memory", "rechallenge"],
         scSubtitle: "sc pseudobulk",
-        hasBulk: true
+        bulkSubtitle: "Von Hoesslin bulk",
+        bulkPopulations: ["DP", "DN"],
+        hasBulk: true,
+        hasSc: true
+      },
+      low_kaech: {
+        bulkPath: "data/low_kaech_bulk_gene_summary.tsv",
+        scPath: null,
+        bulkOrder: ["0h", "24h", "48h", "48h Nur77neg", "168h"],
+        bulkOrders: {
+          "P14 Trm": ["0h", "24h", "48h", "48h Nur77neg", "168h"],
+          "P14 TLN": ["0h", "24h", "48h"],
+          "OT1 Trm": ["0h", "48h"],
+          "OT1 TLN": ["48h"]
+        },
+        bulkPopulations: ["P14 Trm", "P14 TLN", "OT1 Trm", "OT1 TLN"],
+        bulkSubtitle: "Low & Kaech bulk time course",
+        scOrder: [],
+        scSubtitle: "",
+        hasBulk: true,
+        hasSc: false
       },
       maclean_cd8: {
         bulkPath: null,
@@ -253,7 +296,8 @@
         bulkOrder: [],
         scOrder: ["resting", "rechallenged"],
         scSubtitle: "MacLean CD8 pseudobulk, DESeq-style mean of 3 replicates",
-        hasBulk: false
+        hasBulk: false,
+        hasSc: true
       }
     };
     const colors = {
@@ -265,12 +309,18 @@
       "rechallenge": "#c4514b",
       "resting": "#4b9ed8",
       "rechallenged": "#df7b35"
+      ,"0h": "#4b9ed8"
+      ,"24h": "#e3bd32"
+      ,"48h": "#df7b35"
+      ,"48h Nur77neg": "#8e72b8"
+      ,"168h": "#4f8f6f"
     };
 
     let bulkRows = [];
     let scRows = [];
     let allGenes = [];
     let activeDataset = datasets.kallies;
+    const customColors = {};
 
     const statusEl = document.getElementById("status");
     const plotEl = document.getElementById("plot");
@@ -281,6 +331,14 @@
 
     document.getElementById("render").addEventListener("click", render);
     document.getElementById("dataSource").addEventListener("change", loadData);
+    document.getElementById("population").addEventListener("change", () => {
+      updateColorControls();
+      render();
+    });
+    document.getElementById("viewMode").addEventListener("change", () => {
+      updateColorControls();
+      render();
+    });
     expandBtn.addEventListener("click", expandPlot);
     document.getElementById("closeModal").addEventListener("click", closeModal);
     modalEl.addEventListener("click", event => {
@@ -302,26 +360,75 @@
         renderBtn.textContent = "Loading data...";
         statusEl.textContent = "Loading static TSV files...";
         const viewMode = document.getElementById("viewMode");
-        viewMode.disabled = !activeDataset.hasBulk;
+        viewMode.disabled = !(activeDataset.hasBulk && activeDataset.hasSc);
         if (!activeDataset.hasBulk) viewMode.value = "sc";
+        if (!activeDataset.hasSc) viewMode.value = "bulk";
+        updateBulkPopulations();
+        updateColorControls();
 
-        const promises = [fetch(activeDataset.scPath).then(checkFetch).then(r => r.text())];
-        if (activeDataset.hasBulk) promises.unshift(fetch(activeDataset.bulkPath).then(checkFetch).then(r => r.text()));
-        const texts = await Promise.all(promises);
-        const scText = activeDataset.hasBulk ? texts[1] : texts[0];
-        bulkRows = activeDataset.hasBulk ? parseTable(texts[0]) : [];
-        scRows = parseTable(scText);
+        const bulkPromise = activeDataset.hasBulk
+          ? fetch(activeDataset.bulkPath).then(checkFetch).then(r => r.text())
+          : Promise.resolve(null);
+        const scPromise = activeDataset.hasSc
+          ? fetch(activeDataset.scPath).then(checkFetch).then(r => r.text())
+          : Promise.resolve(null);
+        const [bulkText, scText] = await Promise.all([bulkPromise, scPromise]);
+        bulkRows = bulkText ? parseTable(bulkText) : [];
+        scRows = scText ? parseTable(scText) : [];
         allGenes = unique([...bulkRows.map(r => r.gene_name), ...scRows.map(r => r.gene_name)]).sort(naturalSort);
         populateGenes(allGenes);
         renderBtn.disabled = false;
         renderBtn.textContent = "Render plot";
-        const bulkLine = activeDataset.hasBulk ? `${bulkRows.length.toLocaleString()} bulk summary rows\n` : "";
-        statusEl.textContent = `${bulkLine}${scRows.length.toLocaleString()} sc pseudobulk rows\n${allGenes.length.toLocaleString()} searchable gene symbols`;
+        const lines = [];
+        if (activeDataset.hasBulk) lines.push(`${bulkRows.length.toLocaleString()} bulk summary rows`);
+        if (activeDataset.hasSc) lines.push(`${scRows.length.toLocaleString()} sc pseudobulk rows`);
+        lines.push(`${allGenes.length.toLocaleString()} searchable gene symbols`);
+        statusEl.textContent = lines.join("\n");
         render();
       } catch (error) {
         statusEl.textContent = `Could not load static data files.\nUse a local web server or GitHub Pages, not a file:// URL.\n${error.message}`;
         renderBtn.textContent = "Data unavailable";
       }
+    }
+
+    function updateBulkPopulations() {
+      const select = document.getElementById("population");
+      const populations = activeDataset.bulkPopulations || [];
+      select.replaceChildren(...populations.map(value => new Option(value, value)));
+      select.disabled = !activeDataset.hasBulk || populations.length < 2;
+    }
+
+    function activeBulkOrder() {
+      const population = document.getElementById("population").value;
+      return activeDataset.bulkOrders?.[population] || activeDataset.bulkOrder || [];
+    }
+
+    function updateColorControls() {
+      const container = document.getElementById("colorControls");
+      const mode = document.getElementById("viewMode").value;
+      const labels = [];
+      if (activeDataset.hasBulk && mode !== "sc") labels.push(...activeBulkOrder());
+      if (activeDataset.hasSc && mode !== "bulk") labels.push(...activeDataset.scOrder);
+      container.replaceChildren(...unique(labels).map(label => {
+        const row = document.createElement("div");
+        row.className = "color-control";
+        const name = document.createElement("span");
+        name.textContent = label;
+        const picker = document.createElement("input");
+        picker.type = "color";
+        picker.value = customColors[label] || colors[label] || "#4b9ed8";
+        picker.setAttribute("aria-label", `Color for ${label}`);
+        picker.addEventListener("input", () => {
+          customColors[label] = picker.value;
+          render();
+        });
+        row.append(name, picker);
+        return row;
+      }));
+    }
+
+    function barColor(label) {
+      return customColors[label] || colors[label] || "#4b9ed8";
     }
 
     function checkFetch(response) {
@@ -371,7 +478,8 @@
     }
 
     function drawPanels(panels) {
-      const panelW = 290;
+      const maxLabels = Math.max(1, ...panels.map(panel => panel.dataset === "bulk" ? activeBulkOrder().length : activeDataset.scOrder.length));
+      const panelW = Math.max(290, maxLabels * 82 + 50);
       const panelH = 240;
       const left = 164;
       const top = 176;
@@ -391,9 +499,9 @@
       panels.forEach((panel, panelIndex) => {
         const x0 = left + panelIndex * (panelW + gap);
         const values = panelValues(panel);
-        const labels = panel.dataset === "bulk" ? activeDataset.bulkOrder : activeDataset.scOrder;
+        const labels = panel.dataset === "bulk" ? activeBulkOrder() : activeDataset.scOrder;
         const subtitle = panel.dataset === "bulk"
-          ? `Bulk ${document.getElementById("population").value}`
+          ? `${activeDataset.bulkSubtitle || "Bulk"}: ${document.getElementById("population").value}`
           : activeDataset.scSubtitle;
 
         svg.appendChild(text(x0 + panelW / 2, top - 46, panel.gene, "gene-title", "middle"));
@@ -402,11 +510,11 @@
 
         labels.forEach((label, i) => {
           const row = values.find(v => v.label === label);
-          const cx = x0 + 74 + i * 78;
+          const cx = x0 + ((i + 0.5) * panelW / labels.length);
           const barW = 34;
           if (row) {
             const barTop = y(row.mean + 1);
-            svg.appendChild(rect(cx - barW / 2, barTop, barW, top + panelH - barTop, colors[label], "#0b1118"));
+            svg.appendChild(rect(cx - barW / 2, barTop, barW, top + panelH - barTop, barColor(label), "#0b1118"));
             if (row.sem > 0) {
               const low = y(Math.max(row.mean - row.sem, 0) + 1);
               const high = y(row.mean + row.sem + 1);
