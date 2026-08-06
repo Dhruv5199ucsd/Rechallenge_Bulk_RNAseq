@@ -209,6 +209,7 @@
         <option value="kallies">Kallies Sci Immuno 2025 + Von Hoesslin bulk</option>
         <option value="low_kaech">Low &amp; Kaech GSE147907 bulk time course</option>
         <option value="maclean_cd8">MacLean GSE194058 CD8 resting vs rechallenged</option>
+        <option value="fung_lp_trm">Fung GSE185541 LP Trm CD103 subsets</option>
       </select>
 
       <label for="geneSearch">Quick gene</label>
@@ -298,6 +299,17 @@
         scSubtitle: "MacLean CD8 pseudobulk, DESeq-style mean of 3 replicates",
         hasBulk: false,
         hasSc: true
+      },
+      fung_lp_trm: {
+        bulkPath: "data/fung_gse185541_lp_trm_gene_summary.tsv",
+        scPath: null,
+        bulkOrder: ["Baseline", "Infected"],
+        bulkPopulations: ["CD103+Tom+ LP Trm", "CD103-Tom- LP Trm"],
+        bulkSubtitle: "Fung GSE185541 LP Trm bulk",
+        scOrder: [],
+        scSubtitle: "",
+        hasBulk: true,
+        hasSc: false
       }
     };
     const colors = {
@@ -314,6 +326,8 @@
       ,"48h": "#df7b35"
       ,"48h Nur77neg": "#8e72b8"
       ,"168h": "#4f8f6f"
+      ,"Baseline": "#4f8f6f"
+      ,"Infected": "#c4514b"
     };
 
     let bulkRows = [];

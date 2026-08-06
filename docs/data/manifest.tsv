@@ -3,3 +3,4 @@ bulk	bulk_all_gene_summary.tsv	All-gene Von Hoesslin bulk RNA-seq DESeq2-style n
 single_cell_pseudobulk	sc_pseudobulk_all_gene_counts.tsv	All-gene Kallies CD8 scRNA-seq pseudobulk counts summed by condition and median-ratio normalized.
 maclean_cd8_resting_rechallenge	maclean_cd8_resting_rechallenge_pseudobulk_gene_summary.tsv	MacLean GSE194058 CD8a/Cd8b1-positive scRNA-seq pseudobulk DESeq2-style median-ratio normalized counts by resting and rechallenged condition; CLL excluded.
 low_kaech_bulk_timecourse	low_kaech_bulk_gene_summary.tsv	Low and Kaech GSE147907 bulk RNA-seq DESeq2-normalized mean expression and SEM across infection time points for P14 and OT1 Trm and TLN populations.
+fung_gse185541_lp_trm	fung_gse185541_lp_trm_gene_summary.tsv	Fung et al. GSE185541 bulk RNA-seq DESeq2-normalized mean expression and SEM for CD103+Tom+ and CD103-Tom- LP Trm cells at baseline and after infection.
